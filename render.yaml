@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: mc-jira
+    name: mcp_tool_csp
     runtime: docker
     region: singapore
     plan: free
