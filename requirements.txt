@@ -1,5 +1,5 @@
 fastmcp
-playwright
+playwright==1.56.0
 starlette
 requests
 uvicorn
