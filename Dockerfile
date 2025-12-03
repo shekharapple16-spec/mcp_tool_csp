@@ -13,4 +13,4 @@ COPY . .
 
 # Playwright browsers already installed inside the base image
 # Just start your MCP server
-CMD ["python", "server.py"]
+CMD ["python", "main.py"]
