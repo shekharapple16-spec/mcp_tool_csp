@@ -4,7 +4,7 @@ services:
     runtime: docker
     region: singapore
     plan: free
-    repo: https://github.com/shekharapple16-spec/mc_jira
+    repo: https://github.com/shekharapple16-spec/mcp_tool_csp
     dockerfilePath: Dockerfile
     envVars:
       - key: PORT
