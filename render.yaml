@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: mc-jira
+    runtime: docker
+    region: singapore
+    plan: free
+    repo: https://github.com/shekharapple16-spec/mc_jira
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: PORT
+        value: 8000
