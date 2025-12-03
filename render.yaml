@@ -1,10 +1,9 @@
 services:
   - type: web
-    name: mcp_tool_csp
+    name: mc-jira
     runtime: docker
     region: singapore
     plan: free
-    repo: https://github.com/shekharapple16-spec/mcp_tool_csp
     dockerfilePath: Dockerfile
     envVars:
       - key: PORT
