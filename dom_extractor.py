@@ -1,9 +1,31 @@
+# dom_extractor.py
+from playwright.async_api import async_playwright
+
+playwright_instance = None
+browser_instance = None
+
+
+async def init_browser():
+    """Start Playwright only once."""
+    global playwright_instance, browser_instance
+
+    if playwright_instance is None:
+        playwright_instance = await async_playwright().start()
+
+    if browser_instance is None:
+        browser_instance = await playwright_instance.chromium.launch(
+            headless=True,
+            args=["--no-sandbox"]
+        )
+
+
 async def extract_dom_and_locators(url: str):
     await init_browser()
 
-    locator_data = []
-    page = await browser.new_page()
+    page = await browser_instance.new_page()
     await page.goto(url, wait_until="domcontentloaded")
+
+    locator_data = []
 
     elements = await page.query_selector_all("*")
     elements = elements[:200]
@@ -23,12 +45,12 @@ async def extract_dom_and_locators(url: str):
 
             pw = {}
 
-            # Playwright strategies (raw)
             if role and text:
                 pw["role"] = f"{role}[name='{text}']"
 
             if text:
                 pw["text"] = text
+                pw["xpath"] = f"//*[text()='{text}']"
 
             if placeholder:
                 pw["placeholder"] = placeholder
@@ -52,21 +74,17 @@ async def extract_dom_and_locators(url: str):
                 cls_clean = ".".join(cls.split())
                 pw["css"] = f"{tag}.{cls_clean}"
 
-            if text:
-                pw["xpath"] = f"//*[text()='{text}']"
-
-            # --- Decide best locator (Playwright priority) ---
             best = (
-                pw.get("role") or
-                pw.get("text") or
-                pw.get("label") or
-                pw.get("placeholder") or
-                pw.get("alt") or
-                pw.get("title") or
-                pw.get("testid") or
-                pw.get("id") or
-                pw.get("css") or
-                pw.get("xpath")
+                pw.get("role")
+                or pw.get("text")
+                or pw.get("label")
+                or pw.get("placeholder")
+                or pw.get("alt")
+                or pw.get("title")
+                or pw.get("testid")
+                or pw.get("id")
+                or pw.get("css")
+                or pw.get("xpath")
             )
 
             locator_data.append({
@@ -74,7 +92,7 @@ async def extract_dom_and_locators(url: str):
                 "all_playwright": pw,
             })
 
-        except:
+        except Exception:
             continue
 
     await page.close()
