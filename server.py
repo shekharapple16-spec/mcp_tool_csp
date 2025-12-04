@@ -5,9 +5,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from dom_extractor import extract_dom_and_locators
 
-
 app = FastMCP("jira-mcp")
 
+# Env vars
 JIRA_URL = os.getenv("JIRA_URL")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_TOKEN = os.getenv("JIRA_TOKEN")
@@ -32,22 +32,27 @@ def get_acceptance_criteria(issue_id: str):
         return data
 
     fields = data.get("fields", {})
-    ac_value = fields.get(AC_FIELD, None)
+    ac_value = fields.get(AC_FIELD)
 
-    return {"issue": issue_id, "acceptance_criteria": ac_value}
+    return {
+        "issue": issue_id,
+        "acceptance_criteria": ac_value
+    }
 
 
 @app.tool()
 async def extract_dom(url: str):
     """
-    Chunked locator streaming (compatible with older FastMCP).
+    Ultra-light optimized locator streaming.
+    Safe for Render free tier.
     """
     chunk = []
+
     async for locator in extract_dom_and_locators(url):
         chunk.append(locator)
 
-        # Return small chunks to avoid Render timeout
-        if len(chunk) >= 30:
+        # Chunk size optimized for Render CPU limits
+        if len(chunk) >= 25:
             yield chunk
             chunk = []
 
@@ -65,4 +70,8 @@ async def root(request: Request):
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, transport="http")
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        transport="http"
+    )
