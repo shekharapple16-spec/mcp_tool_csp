@@ -20,15 +20,17 @@ async def init_browser():
 
 
 async def extract_dom_and_locators(url: str):
+    """
+    Streams locator data one-by-one instead of returning a huge list.
+    Perfect for Render free tier.
+    """
     await init_browser()
 
     page = await browser_instance.new_page()
     await page.goto(url, wait_until="domcontentloaded")
 
-    locator_data = []
-
     elements = await page.query_selector_all("*")
-    elements = elements[:200]
+    elements = elements[:200]   # safety limit
 
     for el in elements:
         try:
@@ -45,6 +47,7 @@ async def extract_dom_and_locators(url: str):
 
             pw = {}
 
+            # Build locators
             if role and text:
                 pw["role"] = f"{role}[name='{text}']"
 
@@ -74,6 +77,7 @@ async def extract_dom_and_locators(url: str):
                 cls_clean = ".".join(cls.split())
                 pw["css"] = f"{tag}.{cls_clean}"
 
+            # Best locator priority
             best = (
                 pw.get("role")
                 or pw.get("text")
@@ -87,13 +91,13 @@ async def extract_dom_and_locators(url: str):
                 or pw.get("xpath")
             )
 
-            locator_data.append({
+            # 🔥 STREAM IMMEDIATELY
+            yield {
                 "best_playwright": best,
                 "all_playwright": pw,
-            })
+            }
 
         except Exception:
             continue
 
     await page.close()
-    return locator_data

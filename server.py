@@ -6,7 +6,6 @@ from starlette.responses import JSONResponse
 from dom_extractor import extract_dom_and_locators
 
 
-
 # Create MCP app
 app = FastMCP("jira-mcp")
 
@@ -33,7 +32,7 @@ def get_jira_issue(issue_id: str):
 
 @app.tool()
 def get_acceptance_criteria(issue_id: str):
-    """Fetches the acceptance criteria or key requirements associated with a given issue or task ID from a project management system, returning it in a structured format"""
+    """Fetch acceptance criteria from Jira."""
     data = get_jira_issue(issue_id)
 
     if "error" in data:
@@ -47,15 +46,21 @@ def get_acceptance_criteria(issue_id: str):
         "acceptance_criteria": ac_value
     }
 
-@app.tool()
+
+# --------------------------------------------------------
+# 🚀 STREAMING MCP TOOL (locators returned one-by-one)
+# --------------------------------------------------------
+@app.tool(streaming=True)
 async def extract_dom(url: str):
     """
-    MCP tool to extract DOM elements asynchronously from a given URL
-    using Playwright and generate Selenium + Playwright locators.
+    Streams locator data as it's extracted.
+    Works fast on Render free tier.
     """
-    return await extract_dom_and_locators(url)
+    async for locator in extract_dom_and_locators(url):
+        yield locator
 
-# --- Health‑check route using custom_route ---
+
+# --- Health-check route using custom_route ---
 @app.custom_route("/", methods=["GET"])
 async def root(request: Request):
     return JSONResponse({
