@@ -42,22 +42,12 @@ def get_acceptance_criteria(issue_id: str):
 
 @app.tool()
 async def extract_dom(url: str):
-    """
-    Ultra-light optimized locator streaming.
-    Safe for Render free tier.
-    """
-    chunk = []
+    """Wrapper that converts async generator → real list."""
+    results = []
+    async for item in extract_dom_and_locators(url):
+        results.append(item)
 
-    async for locator in extract_dom_and_locators(url):
-        chunk.append(locator)
-
-        # Chunk size optimized for Render CPU limits
-        if len(chunk) >= 25:
-            yield chunk
-            chunk = []
-
-    if chunk:
-        yield chunk
+    return {"locators": results}
 
 
 @app.custom_route("/", methods=["GET"])
