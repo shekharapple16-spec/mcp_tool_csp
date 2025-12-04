@@ -6,8 +6,7 @@ browser_instance = None
 
 async def init_browser():
     """
-    Initialize global Playwright + Chromium only once.
-    Render free tier optimization.
+    Initialize global Playwright + Chromium once (massive performance gain on Render).
     """
     global playwright_instance, browser_instance
 
@@ -18,7 +17,7 @@ async def init_browser():
         if browser_instance is None:
             browser_instance = await playwright_instance.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
+                args=["--no-sandbox", "--disable-dev-shm-usage"]  # Required on Render
             )
     except Exception as e:
         raise RuntimeError(f"Browser init failed: {e}")
@@ -26,72 +25,77 @@ async def init_browser():
 
 async def extract_dom_and_locators(url: str):
     """
-    Async generator that yields optimized locator results.
-    Auto-handles Playwright failures + network issues.
+    Extract optimized locator data with best performance.
     """
 
+    # 1. Reuse browser
     await init_browser()
 
     page = None
 
     try:
+        # 2. New page for each request
         page = await browser_instance.new_page()
 
-        # FIX HTTP2 PROTOCOL ERRORS
-        await page.route("**/*", lambda route: route.continue_())
-
-        await page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=20000
+        # 3. Block heavy resources (huge speed improvement)
+        await page.route("**/*", lambda route:
+            route.abort() if route.request.resource_type in ["image", "media", "font"]
+            else route.continue_()
         )
 
+        # 4. Fastest load strategy
+        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+
+        # 5. Reduced DOM query (no noisy div/span)
         selector = (
-            "a, button, input, select, textarea, "
-            "div, span, h1, h2, h3, label, i, li"
+            "a, button, input, select, textarea, label, h1, h2, h3, "
+            "[role], [data-testid], [placeholder], [name]"
         )
 
         elements = await page.query_selector_all(selector)
 
-        # Render-friendly limit
+        # Cap elements for Render performance
         elements = elements[:150]
 
+        # 6. Loop through elements
         for el in elements:
             try:
-                tag = await el.evaluate("e => e.tagName.toLowerCase()")
-                id_attr = await el.get_attribute("id")
-                cls = await el.get_attribute("class")
-                role = await el.get_attribute("role")
-                placeholder = await el.get_attribute("placeholder")
-                testid = await el.get_attribute("data-testid")
-                title = await el.get_attribute("title")
-                name_attr = await el.get_attribute("name")
-
-                # Safely fetch text
-                text = await el.evaluate(
-                    "e => (e.innerText?.length < 40 ? e.innerText.trim() : '')"
-                )
+                # Batch extract all attributes in ONE JS call (huge speed gain)
+                info = await el.evaluate("""
+                e => ({
+                    tag: e.tagName.toLowerCase(),
+                    id: e.id || null,
+                    cls: e.className || null,
+                    role: e.getAttribute('role'),
+                    placeholder: e.getAttribute('placeholder'),
+                    testid: e.dataset?.testid || null,
+                    title: e.title || null,
+                    name: e.name || null,
+                    text: (e.innerText?.length < 40 ? e.innerText.trim() : '')
+                })
+                """)
 
                 pw = {}
 
-                if testid:
-                    pw["testid"] = testid
-                if id_attr:
-                    pw["id"] = id_attr
-                if role and text:
-                    pw["role"] = f"{role}[name='{text}']"
-                if placeholder:
-                    pw["placeholder"] = placeholder
-                if name_attr:
-                    pw["label"] = name_attr
-                if title:
-                    pw["title"] = title
-                if text:
-                    pw["text"] = text
-                if cls:
-                    cls_clean = ".".join(cls.split())
-                    pw["css"] = f"{tag}.{cls_clean}"
+                if info["testid"]:
+                    pw["testid"] = info["testid"]
+                if info["id"]:
+                    pw["id"] = info["id"]
+                if info["role"] and info["text"]:
+                    pw["role"] = f"{info['role']}[name='{info['text']}']"
+                if info["placeholder"]:
+                    pw["placeholder"] = info["placeholder"]
+                if info["name"]:
+                    pw["label"] = info["name"]
+                if info["title"]:
+                    pw["title"] = info["title"]
+                if info["text"]:
+                    pw["text"] = info["text"]
+                if info["cls"]:
+                    cls_clean = ".".join(info["cls"].split())
+                    pw["css"] = f"{info['tag']}.{cls_clean}"
 
+                # Best locator priority
                 best = (
                     pw.get("testid")
                     or pw.get("id")
@@ -106,16 +110,17 @@ async def extract_dom_and_locators(url: str):
                 yield {
                     "best_playwright": best,
                     "all_playwright": pw,
-                    "tag": tag
+                    "tag": info["tag"]
                 }
 
-            except Exception:
+            except:
                 continue
 
     except Exception as e:
         yield {"error": f"Navigation or extraction failed: {e}"}
 
     finally:
+        # Always close the page safely
         try:
             if page:
                 await page.close()
